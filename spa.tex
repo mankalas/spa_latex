@@ -1,0 +1,513 @@
+\documentclass{article}
+
+\usepackage{amsmath}
+\usepackage{siunitx}
+\usepackage{mathtools}
+\usepackage{url}
+\usepackage{makeidx} \makeindex
+
+\DeclarePairedDelimiter\ceil{\lceil}{\rceil}
+\DeclarePairedDelimiter\floor{\lfloor}{\rfloor}
+\DeclareMathOperator{\arctantwo}{arctan2}
+
+\begin{document}
+
+\tableofcontents
+
+\section{Introduction}
+
+\par With the continuous technological advancements in solar radiation
+applications, there will always be a demand for smaller uncertainty in
+calculating the solar position. Many methods to calculate the solar
+position have been published in the solar radiation literature,
+nevertheless, their uncertainties have been greater than
+$\pm$~\ang{0.01} in solar zenith and azimuth angle calculations, and
+some are only valid for a specific number of years \cite{blanco}. \par
+For example, Michalsky's calculations are limited to the period from
+1950 to 2050 with uncertainty of greater than $\pm$~\ang{0.01}
+\cite{michalsky}, and the calculations of Blanco-Muriel et al.'s are
+limited to the period from 1999 to 2015 with uncertainty greater than
+$\pm$~\ang{0.01} \cite{blanco}.\\ %
+
+An example emphasizing the importance of reducing the uncertainty of
+calculating the solar position to lower than $\pm$~\ang{0.01}, is the
+calibration of pyranometers that measure the global solar
+irradiance. During the calibration, the responsivity of the
+pyranometer is calculated at zenith angles from \ang{0} to \ang{90} by
+dividing its output voltage by th e reference global solar irradiance
+($G$), which is a function of the cosine of the zenith angle
+($\cos(\Theta)$). Figure 1 shows the magnitude of errors that the
+\ang{0.01} uncertainty in $\Theta$ can contribute to the calculation of
+$\cos(\Theta)$ , and consequently $G$ that is used to calculate the
+responsivity.  Figure 1 shows that the uncertainty in $\cos(\Theta)$
+exponentially increases as 2 reaches \ang{90} (e.g. at $\Theta$ equal to
+\ang{87}, the uncertainty in $\cos(\Theta)$ is $0.7\%$, which can result in
+an uncertainty of 0.35\% in calculating $G$; because at such large
+zenith angles the normal incidence irradiance is approximately equal
+to half the value of $G$). From this arises the need to use a solar
+position algorithm with lower uncertainty for users that are
+interested in measuring the global solar irradiance with smaller
+uncertainties in the full zenith angle range from \ang{0} to
+\ang{90}.\\ %
+
+
+\par In this report we describe a procedure for a Solar Position
+Algorithm (SPA) to calculate the solar zenith and azimuth angle with
+uncertainties equal to $\pm$~\ang{0.0003} in the period from the year
+-2000 to 6000. The procedure is adopted from \textit{The Astronomical
+  Algorithms} \cite{meeus}, which is based on the Variations
+Séculaires des Orbites Planétaires Theory (VSOP87) that was developed
+by P. Bretagnon in 1982 then modified in 1987 by Bretagnon and Francou
+\cite{meeus}. In this report, we summarize the complex algorithm
+elements scattered throughout the book to calculate the solar
+position, and introduce some modification to the algorithm to
+accommodate solar radiation applications. For example, in \textit{The
+  Astronomical Algorithms} \cite{meeus}, the azimuth angle is measured
+westward from south, but for solar radiation applications, it is
+measured eastward from north. Also, the observer’s geographical
+longitude is considered positive west, or negative east from
+Greenwich, while for solar radiation applications, it is considered
+negative west, or positive east from Greenwich.\\ %
+
+\par We start this report by:
+\begin{itemize}
+\item Describing the time scales because of the importance of using
+  the correct time in the SPA;
+\item Providing a step by step procedure to calculate the solar
+  position and the solar incidence angle for an arbitrary surface
+  orientation using the methods described in \textit{An Introduction
+    to Solar Radiation} \cite{iqbal};
+\item Evaluating the SPA against the \textit{Astronomical Almanac}
+  (AA) data for the years 1994, 1995, 1996, and 2004.
+\end{itemize}
+
+\par Because of the complexity of the algorithm we included some
+examples, in the Appendix, to give the users confidence in their step
+by step calculations. We also included in the Appendix an explanation
+of how to calculate the equation of time, sun transit (solar noon),
+sunrise, sunset, and how to change the Julian Day to a Calendar
+Date. We also included a C source code with header file, for all the
+calculations in this report (except for the Julian Day to Calendar
+Date conversion). The users can incorporate this module into their own
+code by including the header file, declaring the SPA structure,
+filling in the required input parameters into the strucWeture, and
+then call the SPA calculation function. This function will calculate
+all the output values and fill in the SPA structure for the user.\\ %
+
+\par The users should note that this report is used to calculate the
+solar position for solar radiation applications only, and that it is
+purely mathematical and not meant to teach astronomy or to describe
+the Earth rotation. For more description about the astronomical
+nomenclature that is used through out the report, the user is
+encouraged to review the definitions in the \textit{Astronomical
+  Almanacs}, or other astronomical reference.
+
+\section{Time Scale}
+
+\par The following are the internationally recognized time scales:
+
+\begin{itemize}
+\item The Universal Time ($UT$), or Greenwich civil time, is based on
+  the Earth’s rotation and counted from 0-hour at midnight; the unit
+  is mean solar day \cite{meeus}. $UT$ is the time used to calculate
+  the solar position in the described algorithm. It is sometimes
+  referred to as UT1.
+\item The International Atomic Time ($TAI$) is the duration of the
+  System International Second (SI-second) and based on a large number
+  of atomic clocks \cite{norwich}.
+\item The Coordinated Universal Time ($UTC$) is the bases of most
+  radio time signals and the legal time systems. It is kept to within
+  0.9 seconds of $UT1$ ($UT$) by introducing one second steps to its
+  value (leap second); to date the steps are always positive.
+\item The Terrestrial Dynamical or Terrestrial Time ($TDT$ or $TT$) is
+  the time scale of ephemerides for observations from the Earth
+  surface.
+\end{itemize}
+
+\par The following equations describe the relationship between the above
+time scales (in seconds):
+
+\begin{equation}
+  \label{eq:tt}
+  TT = TAI + 32.184
+\end{equation}
+
+\begin{equation}
+  \label{eq:ut}
+  UT = TT - \Delta T
+\end{equation}
+
+\par where $\Delta T$ is the difference between the Earth rotation time and
+the Terrestrial Time ($TT$). It is derived from observation only and
+reported yearly in the Astronomical Almanac [5].
+
+\begin{equation}
+  \label{eq:ut1}
+  UT = UT1 = UTC + \Delta UT1
+\end{equation}
+
+\par where $\Delta UT1$ is a fraction of a second, positive or negative value,
+that is added to the $UTC$ to adjust for the Earth irregular
+rotational rate. It is derived from observation, but predicted values
+are transmitted in code in some time signals, e.g. weekly by the
+U.S. Naval Observatory (USNO) [6].
+
+\section{Procedure}
+
+\subsection{Calculate the Julian and Julian Ephemeris Day, Century,
+  and Millennium}
+
+\par The Julian date starts on January 1, in the year - 4712 at 12:00:00
+UT. The Julian Day ($JD$) is calculated using UT and the Julian
+Ephemeris Day ($JDE$) is calculated using $TT$. In the following
+steps, note that there is a 10-day gap between the Julian and
+Gregorian calendar where the Julian calendar ends on October 4, 1582
+($JD = 2299160$), and after 10-days the Gregorian calendar starts on
+October 15, 1582.
+
+\subsubsection{Calculate the Julian Day ($JD$)}
+
+\begin{equation}
+  \label{eq:jd}
+  JD = \floor{365.25 \times (Y + 4716)} + \floor{30.6001 \times (M + 1)} + D + B - 1524.5
+\end{equation}
+
+\par where
+\begin{itemize}
+\item $\floor{x}$ is the integer of the calculated term (e.g. 8.7~=~8,
+  8.2~=~8, and -8.7~` ­ 8, etc.);
+\item $Y$ is the year (e.g. 2001, 2002, 2018, etc.);
+\item $M$ is the month of the year (e.g. 1 for January, etc.). Note
+  that if $M = 1$ or $M = 2$, then $Y = Y - 1$ and $M = M + 12$. If
+  $M > 2$, then $Y$ and $M$ are not changed;
+\item $D$ is the day of the month with decimal time (e.g. for the
+  second day of the month at 12:30:30 UT, $D = 2.521180556$);
+\item $B$ is equal to
+  \begin{itemize}
+  \item $0$, for the Julian calendar (i.e. by using $B = 0$ in equation
+    \ref{eq:jd}, $JD < 2299160$);
+  \item $(2 - A + \floor{A/4})$) for the Gregorian calendar (i.e. by
+    using $B = 0$ in equation \ref{eq:jd}, $JD > 2299160$), where $A
+    = \floor{Y/100}$.
+  \end{itemize}
+\end{itemize}
+
+\par For users who wish to use their local time instead of UT, change the
+time zone to a fraction of a day (by dividing it by 24), then subtract
+the result from $JD$. Note that the fraction is subtracted from $JD$
+calculated before the test for $B < 2299160$ to maintain the Julian
+and Gregorian periods.
+
+\par Table \ref{tbl:jd} shows examples to test any implemented program
+used to calculate the $JD$.
+
+\subsubsection{Calculate the Julian Ephemeris Day ($JDE$)}
+
+\begin{equation}
+  \label{eq:jde}
+  JDE = JD + \frac{\Delta T}{86400}
+\end{equation}
+
+\subsubsection{Calculate the Julian century ($JC$) and the Julian
+  Ephemeris Century ($JCE$) for the 2000 standard epoch}
+
+\begin{equation}
+  \label{eq:jc}
+  JC = \frac{JD - 2451545}{36525}
+\end{equation}
+
+\begin{equation}
+  \label{eq:jce}
+  JCE = \frac{JDE - 2451545}{36525}
+\end{equation}
+
+\subsubsection{Calculate the Julian Ephemeris Millennium ($JME$) for
+  the 2000 standard epoch}
+
+\begin{equation}
+  \label{eq:jme}
+  JME = \frac{JCE}{10}
+\end{equation}
+
+\subsection{Calculate the Earth heliocentric longitude, latitude, and
+  radius vector ($L$, $B$, and $R$)}
+\label{sec:earth_heliocentric}
+
+\par “Heliocentric” means that the Earth position is calculated with
+respect to the center of the sun.
+
+\begin{enumerate}
+
+\item \label{item:step_1} For each row of table
+  \ref{tbl:earth_periodic_terms}, calculate the term $L0_i$ (in
+  radians):
+
+  \begin{equation}
+    \label{eq:l0i}
+    L0_i = A_i \times \cos\left(B_i + C_i \times JME\right)
+  \end{equation}
+  where
+  \begin{itemize}
+  \item $i$ is the $i$th row for the term $L0$ in table
+    \ref{tbl:earth_periodic_terms};
+  \item $A_i$, $B_i$ and $C_i$ are the values in the $i$th row and
+    $A$, $B$ and $C$ columns in the table
+    \ref{tbl:earth_periodic_terms}, for the term $L0$ (in radians).
+  \end{itemize}
+
+\item Calculate the term $L0$ (in radians):
+
+  \begin{equation}
+    \label{eq:l0}
+    L0 = \sum_{i=0}^{n}L0_i
+  \end{equation}
+  \par where $n$ is the number of rows for the term $L0$ in table
+  \ref{tbl:earth_periodic_terms}.
+
+\item \label{item:step_3} Calculate the terms $L1$, $L2$, $L3$, $L4$,
+  and $L5$ by using equations \ref{eq:l0i} and \ref{eq:l0} and
+  changing the 0 to 1, 2, 3, 4, and 5, and by using their
+  corresponding values in 4 columns $A$, $B$, and $C$ in table
+  \ref{tbl:earth_periodic_terms} (in radians);
+
+\item \label{item:step_4} Calculate the Earth heliocentric longitude,
+  $L_r$ (in radians),
+
+  \begin{equation}
+    \label{eq:l}
+    L_r = \frac{L0 + L1 \times JME + L2 \times JME^2 + L3 \times JME^3 + L4 \times JME^4 + L5 \times JME^5}{10^8}
+  \end{equation}
+
+\item \label{item:step_5} Calculate $L$ in degrees
+
+  \begin{equation}
+    \label{eq:l_in_degrees}
+    L = \frac{L_r \times 180}{\pi}
+  \end{equation}
+
+  \par where $\pi$ is approximately equal to 3.1415926535898;
+
+\item \label{tiem:step_6} Limit $L$ to the range from \ang{0} to
+  \ang{360}. That can be accomplished by dividing $L$ by 360 and
+  recording the decimal fraction of the division as $F$. If $L$ is
+  positive, then the limited $L = 360 * F$ .If $L$ is negative, then
+  the limited $L = 360 - 360 * F$;
+
+\item \label{item:step_7} Calculate the Earth heliocentric latitude,
+  $B$ (in degrees), by using table \ref{tbl:earth_periodic_terms} and
+  steps \ref{item:step_1} through \ref{item:step_5} and by replacing
+  all the $L$s by $B$s in all equations. Note that there are no $B2$
+  through $B5$, consequently, replace them by zero in steps
+  \ref{item:step_3} and \ref{item:step_4};
+
+\item Calculate the Earth radius vector, $R$ (in Astronomical Units,
+  AU), by repeating step \ref{item:step_7} and by replacing all $L$s
+  by $R$s in all equations. Note that there is no $R5$, consequently,
+  replace it by zero in steps \ref{item:step_3} and \ref{item:step_4}.
+
+\end{enumerate}
+
+\subsection{Calculate the geocentric longitude and latitude ($\Theta$ and
+  $\beta$)}
+
+\par “Geocentric” means that the sun position is calculated with respect
+to the Earth center.
+
+\begin{enumerate}
+\item Calculate the geocentric longitude, $\Theta$ (in degrees)
+
+  \begin{equation}
+    \label{eq:theta}
+    \Theta = L + 180
+  \end{equation}
+
+\item Limit $\Theta$ to the range from \ang{0} to \ang{360} as described in
+  step \ref{item:step_6} in section \ref{sec:earth_heliocentric};
+
+\item Calculate the geocentric latitude, $\beta$ (in degrees)
+
+  \begin{equation}
+    \label{eq:geo_lat}
+    \beta = -B
+  \end{equation}
+\end{enumerate}
+
+\subsection{Calculate the nutation in longitude and obliquity
+  ($\Delta\Psi$ and $\Delta\varepsilon$)}
+
+\begin{enumerate}
+\item Calculate the mean elongation of the moon from the sun, $X0$ (in
+  degrees)
+  \begin{equation}
+    \label{eq:x0}
+    X0 = 297.85036 + 445267.111480 \times JCE - 0.0019142 \times JCE^2 + \frac{JCE^3}{189474}
+  \end{equation}
+
+\item Calculate the mean anomaly of the sun (Earth), $X1$ (in degrees)
+  \begin{equation}
+    \label{eq:x1}
+    X1 = 357.52772 + 35999.050340 \times JCE - 0.0001603 \times JCE^2 - \frac{JCE^3}{300000}
+  \end{equation}
+
+\item Calculate the mean anomaly of the moon, $X2$ (in degrees),
+  \begin{equation}
+    \label{eq:x2}
+    X2 = 134.96298 + 477198.867398 \times JCE + 0.0086972 \times JCE^2 + \frac{JCE^3}{56250}
+  \end{equation}
+
+\item Calculate the moon’s argument of latitude, $X3$ (in degrees),
+  \begin{equation}
+    \label{eq:x3}
+    X3 = 93.27191 + 483202.017538 \times JCE - 0.0036825 \times JCE^2 + \frac{JCE^3}{327270}
+  \end{equation}
+
+\item Calculate the longitude of the ascending node of the moon’s mean
+  orbit on the ecliptic, measured from the mean equinox of the date,
+  $X4$ (in degrees),
+  \begin{equation}
+    \label{eq:x4}
+    X4 = 125.04452 - 1934.136261 \times JCE + 0.0020708 \times JCE^2 + \frac{JCE^3}{450000}
+  \end{equation}
+
+\item For each row of table \ref{tbl:nutation_periodic_terms},
+  calculate the terms $\Delta\Psi$ and $\Delta\varepsilon$ (in 0.0001of arc seconds)
+
+  \begin{equation}
+    \label{eq:delta_psi_i}
+    \Delta\Psi_i = (a_i + b_i \times JCE) \times \sin\left(\sum_{j=0}^4 X_j \times Y_{i,j}\right)
+  \end{equation}
+
+  \begin{equation}
+    \label{eq:delta_epsilon_i}
+    \Delta\varepsilon_i = (c_i + d_i \times JCE) \times \cos\left(\sum_{j=o}^4 X_j \times Y_{i,j}\right)
+  \end{equation}
+
+  \par where
+  \begin{itemize}
+  \item $a_i$, $b_i$, $c_i$ and $d_i$ are the values listed in the
+    $i$th row and columns $a$, $b$, $c$ and $d$ in table
+    \ref{tbl:nutation_periodic_terms};
+  \item $X_i$ is the $j$th $X$ calculated by using equation
+    \ref{eq:x0} through \ref{eq:x4};
+  \item $Y_{i,j}$ is the value listed in the $i$th row and $j$th $Y$
+    column in table \ref{tbl:nutation_periodic_terms}.
+  \end{itemize}
+
+\item Calculate the nutation longitude $\Delta\Psi$ (in degrees)
+  \begin{equation}
+    \label{eq:delta_psi}
+    \Delta\Psi = \frac{\sum_{i=0}^n\Delta\Psi_i}{36000000}
+  \end{equation}
+
+  \par where $n$ in the number of rows in table
+  \ref{tbl:nutation_periodic_terms} ($n = 63$ rows in the table)
+
+\item Calculate the nutation in obliquity $\Delta\varepsilon$ (in degrees)
+  \begin{equation}
+    \label{eq:delta_epsilon}
+    \Delta\varepsilon = \frac{\sum_{i=0}^n\Delta\varepsilon_i}{36000000}
+  \end{equation}
+\end{enumerate}
+
+\subsection{Calculate the true obliquity of the ecliptic $\varepsilon$ (in
+  degrees)}
+
+\begin{enumerate}
+\item Calculate the mean obliquity of the ecliptic $\varepsilon_0$ (in arc
+  seconds)
+  \begin{equation}
+    \label{eq:epsilon_0}
+    \begin{split}
+      \varepsilon_0 = & 84381.448 - 4680.93U - 1.55U^2 + 1999.25U^3 - \\
+      & 51.38U^4 - 249.67U^5 - 39.05U^6 + 7.12U^7 + \\
+      & 27.87U^8 + 5.79U^9 + 2.45U^{10}
+    \end{split}
+  \end{equation}
+
+  \par where $U = \frac{JME}{10}$;
+
+\item Calculate the true obliquity of the ecliptic, $\varepsilon$ (in degrees),
+
+  \begin{equation}
+    \label{eq:epsilon_0}
+    \varepsilon = \frac{\varepsilon_0}{3600} + \Delta\varepsilon
+  \end{equation}
+\end{enumerate}
+
+\subsection{Calculate the aberration correction, $\Delta\tau$ (in degrees)}
+
+\begin{equation}
+  \label{eq:delta_t}
+  \Delta\tau = -\frac{20.4898}{3600 \times R}
+\end{equation}
+
+\subsection{Calculate the apparent sun longitude, $\lambda$ (in degrees)}
+
+\begin{equation}
+  \label{eq:lambda}
+  \lambda = \Theta + \Delta\Psi + \Delta\tau
+\end{equation}
+
+\subsection{Calculate the apparent sidereal time at Greenwich at any
+  given time, $\nu$ (in degrees)}
+
+\begin{enumerate}
+\item Calculate the mean sidereal time at Greenwich, $\nu_o$ (in
+  degrees)
+
+  \begin{equation}
+    \label{eq:nu_0}
+    \nu_0 = 80.46061837 + 360.98564736629 \times (JD - 2451545) + 0.000387933 \times JC^2 - \frac{JC^3}{38710000}
+  \end{equation}
+
+\item Limit $\nu_0$ to the range from \ang{0} to \ang{360} as described
+  in step \ref{item:step_6} in section \ref{sec:earth_heliocentric};
+
+\item Calculate the apparent sidereal time at Greenwich, $\nu$ (in
+  degrees,
+
+  \begin{equation}
+    \label{eq:nu}
+    \nu = \nu_0 + \Delta\Psi \times \cos(\varepsilon)
+  \end{equation}
+\end{enumerate}
+
+\subsection{Calculate the geocentric sun right ascension, $\alpha$ (in
+  degrees}
+
+\begin{enumerate}
+\item Calculate the sun right ascension, $\alpha$ (in radians),
+  \begin{equation}
+    \label{eq:alpha}
+    \alpha = \arctan2\left(\frac{\sin(\lambda) \times \cos(\varepsilon) - \tan(\beta) \times \sin(\varepsilon)}{\cos(\lambda)}\right)
+  \end{equation}
+
+  \par where $\arctan2$ is an arctangent function that is applied to the
+  numerator and the denominator (instead of the actual division) to
+  maintain the correct quadrant of the $\alpha$ where $\alpha$ is in the range
+  from $-\pi$ to $\pi$.
+\end{enumerate}
+
+\begin{equation}
+  \label{eq:delta}
+  \delta = \arcsin\left(\sin(\beta) \times \cos(\varepsilon) + \cos(\beta) \times \sin(\varepsilon) \times \sin(\lambda)\right)
+\end{equation}
+
+\begin{equation}
+  \label{eq:delta_alpha}
+  \Delta\alpha = \arctan2\left(\frac{-x \times \sin(\xi) \times \sin(H)}{\cos(\delta) - x \times \sin(\xi) \times \cos(H)}\right)
+\end{equation}
+
+\begin{equation}
+  \label{eq:delta_e}
+  \Delta e = \frac{P}{1010}\times\frac{283}{273 + T} \times \frac{1.02}{60 \times \tan\left(e_0 + \frac{10.3}{e_0 + 5.11}\right)}
+\end{equation}
+
+\appendix
+
+\printindex
+
+\bibliographystyle{ieeetr}
+\bibliography{spa}
+
+\end{document}
